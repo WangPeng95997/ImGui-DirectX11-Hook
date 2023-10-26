@@ -179,8 +179,8 @@ HRESULT __fastcall HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UIN
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    //ImGui::ShowDemoWindow();
-    g_GuiWindow->Update();
+    ImGui::ShowDemoWindow();
+    //g_GuiWindow->Update();
 
     ImGui::EndFrame();
     ImGui::Render();
@@ -195,7 +195,7 @@ DWORD WINAPI Start(LPVOID lpParameter)
     g_hHinstance = (HMODULE)lpParameter;
     g_hEndEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     g_GuiWindow = new GuiWindow();
-    g_GuiWindow->Init();
+    //g_GuiWindow->Init();
 
     WNDCLASSEX windowClass;
     windowClass.cbSize = sizeof(WNDCLASSEX);
