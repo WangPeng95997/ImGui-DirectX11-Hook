@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <string>
 
-class utils
+class Utils
 {
 
 };
