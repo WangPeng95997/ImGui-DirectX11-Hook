@@ -1,6 +1,6 @@
 ﻿#include <d3d11.h>
 #include "GuiWindow.h"
-#include "MinHook.h"
+#include "MinHook/include/MinHook.h"
 #pragma comment(lib, "d3d11.lib")
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -8,57 +8,55 @@ typedef HRESULT(WINAPI* Present)(IDXGISwapChain* pSwapChain, UINT SyncInterval, 
 typedef HRESULT(WINAPI* ResizeBuffers)(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 HRESULT WINAPI HK_ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
-LRESULT WINAPI HK_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT WINAPI HK_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 Present Original_Present;
 ResizeBuffers Original_ResizeBuffers;
 WNDPROC Original_WndProc;
-HMODULE g_hHinstance;
+HMODULE g_hInstance;
 HANDLE g_hEndEvent;
-DWORD64* g_methodsTable;
+LPVOID g_lpVirtualTable;
 GuiWindow* g_GuiWindow;
-ID3D11Device* g_dx11Device;
-ID3D11DeviceContext* g_dx11Context;
-ID3D11RenderTargetView* g_dx11RenderTargetView;
-bool g_bImGuiInit = false;
+ID3D11Device* g_pDx11Device;
+ID3D11DeviceContext* g_pDx11Context;
+ID3D11RenderTargetView* g_pDx11RenderTargetView;
 
 void InitHook()
 {
+    QWORD* lpVTable = (QWORD*)g_lpVirtualTable;
     MH_Initialize();
 
     // Present
-    int index = 8;
-    void* pTarget = (void*)g_methodsTable[index];
-    MH_CreateHook(pTarget, HK_Present, (void**)&Original_Present);
-    MH_EnableHook(pTarget);
+    LPVOID lpTarget = (LPVOID)lpVTable[8];
+    MH_CreateHook(lpTarget, HK_Present, (void**)&Original_Present);
+    MH_EnableHook(lpTarget);
 
     // ResizeBuffers
-    index = 13;
-    pTarget = (void*)g_methodsTable[index];
-    MH_CreateHook(pTarget, HK_ResizeBuffers, (void**)&Original_ResizeBuffers);
-    MH_EnableHook(pTarget);
+    lpTarget = (LPVOID)lpVTable[13];
+    MH_CreateHook(lpTarget, HK_ResizeBuffers, (void**)&Original_ResizeBuffers);
+    MH_EnableHook(lpTarget);
 }
 
 void ReleaseHook()
 {
-    SetWindowLongPtr(g_GuiWindow->hwnd, GWLP_WNDPROC, (LONG_PTR)Original_WndProc);
+    ::SetWindowLongPtr(g_GuiWindow->hWnd, GWLP_WNDPROC, (LONG_PTR)Original_WndProc);
     MH_DisableHook(MH_ALL_HOOKS);
 
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    g_dx11Device->Release();
-    g_dx11Context->Release();
-    g_dx11RenderTargetView->Release();
+    g_pDx11Device->Release();
+    g_pDx11Context->Release();
+    g_pDx11RenderTargetView->Release();
 
-    ::free(g_methodsTable);
-    g_methodsTable = nullptr;
+    ::free(g_lpVirtualTable);
+    g_lpVirtualTable = nullptr;
 
     SetEvent(g_hEndEvent);
 }
 
-LRESULT WINAPI HK_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT WINAPI HK_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
@@ -72,10 +70,10 @@ LRESULT WINAPI HK_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         break;
     }
 
-    if (g_GuiWindow->bShowMenu && ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
+    if (g_GuiWindow->bShowMenu && ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
         return true;
 
-    return CallWindowProc(Original_WndProc, hwnd, uMsg, wParam, lParam);
+    return ::CallWindowProc(Original_WndProc, hWnd, uMsg, wParam, lParam);
 }
 
 inline void InitImGui()
@@ -117,17 +115,15 @@ inline void InitImGui()
     Style.Colors[ImGuiCol_TitleBg] = ImColor(0, 74, 122, 255).Value;
     Style.Colors[ImGuiCol_TitleBgActive] = ImColor(0, 74, 122, 255).Value;
 
-    ImGui_ImplWin32_Init(g_GuiWindow->hwnd);
-    ImGui_ImplDX11_Init(g_dx11Device, g_dx11Context);
-    Original_WndProc = (WNDPROC)SetWindowLongPtr(g_GuiWindow->hwnd, GWLP_WNDPROC, (LONG_PTR)HK_WndProc);
-
-    g_bImGuiInit = true;
+    ImGui_ImplWin32_Init(g_GuiWindow->hWnd);
+    ImGui_ImplDX11_Init(g_pDx11Device, g_pDx11Context);
+    Original_WndProc = (WNDPROC)::SetWindowLongPtr(g_GuiWindow->hWnd, GWLP_WNDPROC, (LONG_PTR)HK_WndProc);
 }
 
 HRESULT WINAPI HK_ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
-    g_dx11Context->OMSetRenderTargets(0, nullptr, nullptr);
-    g_dx11RenderTargetView->Release();
+    g_pDx11Context->OMSetRenderTargets(0, nullptr, nullptr);
+    g_pDx11RenderTargetView->Release();
     HRESULT hResult = Original_ResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 
     ID3D11Texture2D* pBackBuffer;
@@ -135,38 +131,41 @@ HRESULT WINAPI HK_ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UI
     if (!pBackBuffer)
         return hResult;
 
-    g_dx11Device->GetImmediateContext(&g_dx11Context);
-    g_dx11Device->CreateRenderTargetView(pBackBuffer, NULL, &g_dx11RenderTargetView);
-    g_dx11Device->Release();
+    g_pDx11Device->GetImmediateContext(&g_pDx11Context);
+    g_pDx11Device->CreateRenderTargetView(pBackBuffer, NULL, &g_pDx11RenderTargetView);
+    g_pDx11Device->Release();
     pBackBuffer->Release();
-    g_dx11Context->OMSetRenderTargets(1, &g_dx11RenderTargetView, nullptr);
+    g_pDx11Context->OMSetRenderTargets(1, &g_pDx11RenderTargetView, nullptr);
 
-    D3D11_VIEWPORT viewPort;
+    D3D11_VIEWPORT viewPort{};
     viewPort.Width = (float)Width;
     viewPort.Height = (float)Height;
     viewPort.MinDepth = 0.0f;
     viewPort.MaxDepth = 1.0f;
     viewPort.TopLeftX = 0;
     viewPort.TopLeftY = 0;
-    g_dx11Context->RSSetViewports(1, &viewPort);
+    g_pDx11Context->RSSetViewports(1, &viewPort);
 
     return hResult;
 }
 
 HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
-    if (!g_bImGuiInit)
+    static bool bImGuiInit = false;
+
+    if (!bImGuiInit)
     {
-        if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_dx11Device)))
+        if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_pDx11Device)))
         {
             ID3D11Texture2D* pBackBuffer;
             pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
             if (pBackBuffer) {
-                g_dx11Device->GetImmediateContext(&g_dx11Context);
-                g_dx11Device->CreateRenderTargetView(pBackBuffer, NULL, &g_dx11RenderTargetView);
+                g_pDx11Device->GetImmediateContext(&g_pDx11Context);
+                g_pDx11Device->CreateRenderTargetView(pBackBuffer, NULL, &g_pDx11RenderTargetView);
                 pBackBuffer->Release();
 
                 InitImGui();
+                bImGuiInit = true;
             }
         }
         else
@@ -186,7 +185,7 @@ HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Fl
 
     ImGui::EndFrame();
     ImGui::Render();
-    g_dx11Context->OMSetRenderTargets(1, &g_dx11RenderTargetView, nullptr);
+    g_pDx11Context->OMSetRenderTargets(1, &g_pDx11RenderTargetView, nullptr);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     return Original_Present(pSwapChain, SyncInterval, Flags);
@@ -194,18 +193,18 @@ HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Fl
 
 DWORD WINAPI Start(LPVOID lpParameter)
 {
-    g_hHinstance = (HMODULE)lpParameter;
-    g_hEndEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    g_hInstance = (HMODULE)lpParameter;
+    g_hEndEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
     g_GuiWindow = new GuiWindow();
     g_GuiWindow->Init();
 
-    WNDCLASSEX windowClass;
+    WNDCLASSEX windowClass{};
     windowClass.cbSize = sizeof(WNDCLASSEX);
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc = DefWindowProc;
+    windowClass.lpfnWndProc = ::DefWindowProc;
     windowClass.cbClsExtra = 0;
     windowClass.cbWndExtra = 0;
-    windowClass.hInstance = GetModuleHandle(NULL);
+    windowClass.hInstance = ::GetModuleHandle(NULL);
     windowClass.hIcon = NULL;
     windowClass.hCursor = NULL;
     windowClass.hbrBackground = NULL;
@@ -214,7 +213,7 @@ DWORD WINAPI Start(LPVOID lpParameter)
     windowClass.hIconSm = NULL;
 
     ::RegisterClassEx(&windowClass);
-    HWND hwnd = ::CreateWindow(
+    HWND hWnd = ::CreateWindow(
         windowClass.lpszClassName,
         "DirectX11Window",
         WS_OVERLAPPEDWINDOW,
@@ -227,16 +226,16 @@ DWORD WINAPI Start(LPVOID lpParameter)
         windowClass.hInstance,
         NULL);
 
-    HMODULE d3d11Module = ::GetModuleHandleA("d3d11.dll");
-    if (d3d11Module)
+    HMODULE hD3D11Module = ::GetModuleHandleA("d3d11.dll");
+    if (hD3D11Module)
     {
-        LPVOID D3D11CreateDeviceAndSwapChain = ::GetProcAddress(d3d11Module, "D3D11CreateDeviceAndSwapChain");
+        LPVOID D3D11CreateDeviceAndSwapChain = ::GetProcAddress(hD3D11Module, "D3D11CreateDeviceAndSwapChain");
         if (D3D11CreateDeviceAndSwapChain)
         {
             D3D_FEATURE_LEVEL featureLevel;
             D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0 };
 
-            DXGI_SWAP_CHAIN_DESC swapChainDesc;
+            DXGI_SWAP_CHAIN_DESC swapChainDesc{};
             swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
             swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
             swapChainDesc.BufferDesc.Width = 100;
@@ -249,38 +248,37 @@ DWORD WINAPI Start(LPVOID lpParameter)
             swapChainDesc.BufferCount = 1;
             swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
             swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-            swapChainDesc.OutputWindow = hwnd;
+            swapChainDesc.OutputWindow = hWnd;
             swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
             swapChainDesc.Windowed = 1;
 
-            IDXGISwapChain* swapChain;
-            ID3D11Device* d3d11Device;
-            ID3D11DeviceContext* d3d11Context;
-            if (!((long(__stdcall*)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, const DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**))
-                (D3D11CreateDeviceAndSwapChain))(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels, 2, D3D11_SDK_VERSION, &swapChainDesc, &swapChain, &d3d11Device, &featureLevel, &d3d11Context))
+            IDXGISwapChain* pSwapChain;
+            ID3D11Device* pD3D11Device;
+            ID3D11DeviceContext* pD3D11Context;
+            if (!((DWORD(WINAPI*)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, const DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**))
+                (D3D11CreateDeviceAndSwapChain))(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels, 2, D3D11_SDK_VERSION, &swapChainDesc, &pSwapChain, &pD3D11Device, &featureLevel, &pD3D11Context))
             {
-                g_methodsTable = (DWORD64*)::calloc(205, sizeof(DWORD64));
-                if (g_methodsTable)
+                g_lpVirtualTable = ::calloc(205, sizeof(QWORD));
+                if (g_lpVirtualTable)
                 {
-                    ::memcpy(g_methodsTable, *(DWORD64**)swapChain, 18 * sizeof(DWORD64));
-                    ::memcpy(g_methodsTable + 18, *(DWORD64**)d3d11Device, 43 * sizeof(DWORD64));
-                    ::memcpy(g_methodsTable + 18 + 43, *(DWORD64**)d3d11Context, 144 * sizeof(DWORD64));
+                    ::memcpy(g_lpVirtualTable, *(QWORD**)pSwapChain, 18 * sizeof(QWORD));
+                    ::memcpy((QWORD*)g_lpVirtualTable + 18, *(QWORD**)pD3D11Device, 43 * sizeof(QWORD));
+                    ::memcpy((QWORD*)g_lpVirtualTable + 18 + 43, *(QWORD**)pD3D11Context, 144 * sizeof(QWORD));
+                    pSwapChain->Release();
+                    pD3D11Device->Release();
+                    pD3D11Context->Release();
 
                     InitHook();
-
-                    swapChain->Release();
-                    d3d11Device->Release();
-                    d3d11Context->Release();
                 }
             }
         }
     }
-    ::DestroyWindow(hwnd);
+    ::DestroyWindow(hWnd);
     ::UnregisterClass(windowClass.lpszClassName, windowClass.hInstance);
 
     if (g_hEndEvent)
         ::WaitForSingleObject(g_hEndEvent, INFINITE);
-    ::FreeLibraryAndExitThread(g_hHinstance, 0);
+    ::FreeLibraryAndExitThread(g_hInstance, 0);
 
     return 0;
 }

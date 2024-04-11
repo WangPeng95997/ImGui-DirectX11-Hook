@@ -9,8 +9,8 @@
 #define AUTHORINFO          "Build.20xx.xx.xx\nby l4kkS41"	
 
 #define WINDOWNAME          "ImGui Window"
-#define MAJORVERSION        0
-#define MINORVERSION        1
+#define MAJORVERSION        1
+#define MINORVERSION        0
 #define REVISIONVERSION     0
 
 #define WIDTH               600
@@ -20,37 +20,37 @@
 #define TARGETWINDOW        "Renderer: [DirectX11], Input: [Window Messages], 64 bits"
 #define TARGETMODULE        "GFXTest64.exe"
 
+typedef unsigned __int64 QWORD;
+
 class GuiWindow
 {
 public:
     enum GuiStatus : DWORD
     {
-        Normal = 0,
         Reset = 1 << 0,
         Exit = 1 << 1,
         Detach = 1 << 2
     };
 
-    HANDLE      hProcess;
+    HWND        hWnd;
     HMODULE     hModule;
-    HWND        hwnd;
+    HANDLE      hProcess;
     PCHAR       FontPath;
-    PCHAR       Name;
+    PCHAR       WindowName;
     LPBYTE      ModuleAddress;
     LPBYTE      lpBuffer;
     ImVec2      StartPostion;
     DWORD       UIStatus;
-    bool        bCrossHair;
+    bool        bCrosshair;
     bool        bShowMenu;
 
     GuiWindow();
     ~GuiWindow();
 
     void Init();
-    void Release();
     void Update();
 
     void Button_Exit();
-    void ResetWindow();
+
     void Toggle_CrossHair(const bool& isEnable);
 };
