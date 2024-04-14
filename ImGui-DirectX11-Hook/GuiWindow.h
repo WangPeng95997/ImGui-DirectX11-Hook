@@ -52,5 +52,5 @@ public:
 
     void Button_Exit();
 
-    void Toggle_CrossHair(const bool& isEnable);
+    void Toggle_Crosshair(const bool& isEnable);
 };

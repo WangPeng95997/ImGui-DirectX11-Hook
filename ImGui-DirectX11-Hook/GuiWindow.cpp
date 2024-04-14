@@ -73,7 +73,7 @@ void GuiWindow::Update()
             this->UIStatus |= GuiStatus::Exit;
 
         if (ImGui::Checkbox(u8"»æÖÆ×¼ÐÇ", &this->bCrosshair))
-            Toggle_CrossHair(this->bCrosshair);
+            Toggle_Crosshair(this->bCrosshair);
 
         const std::string authorInfo = std::string(AUTHORINFO);
         ImVec2 textSize = ImGui::CalcTextSize(authorInfo.c_str());
@@ -134,7 +134,7 @@ void GuiWindow::Button_Exit()
     ImGui::PopStyleColor(2);
 }
 
-void GuiWindow::Toggle_CrossHair(const bool& isEnable)
+void GuiWindow::Toggle_Crosshair(const bool& isEnable)
 {
     this->bCrosshair = isEnable;
 }
