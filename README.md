@@ -1,12 +1,17 @@
 # ImGui-DirectX11-Hook
 
-## How to use
+## Getting Started
+[Dllmain.cpp](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/ImGui-DirectX11-Hook/Dllmain.cpp#L183-L184)
 ```C++
-// GuiWindow.h
-#define TARGETCLASS         "gfx_test"
-#define TARGETWINDOW        "Renderer: [DirectX11], Input: [Window Messages], 64 bits"
-#define TARGETMODULE        "GFXTest64.exe"
+ImGui::ShowDemoWindow();
+//g_GuiWindow->Update();
 ```
 
 ## Screenshot
 ![Image](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/Screenshot/Image.png)
+
+## Credits
+* ImGui   https://github.com/ocornut/imgui
+* kiero https://github.com/Rebzzel/kiero
+* MinHook https://github.com/TsudaKageyu/minhook
+* UniversalHookX https://github.com/bruhmoment21/UniversalHookX
