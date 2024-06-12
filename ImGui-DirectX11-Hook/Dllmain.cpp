@@ -1,9 +1,8 @@
 ﻿#include <d3d11.h>
 #include "GuiWindow.h"
 #include "MinHook/include/MinHook.h"
-#pragma comment(lib, "d3d11.lib")
 
-extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 typedef HRESULT(WINAPI* Present)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 typedef HRESULT(WINAPI* ResizeBuffers)(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
@@ -23,7 +22,8 @@ ID3D11RenderTargetView* g_pDx11RenderTargetView;
 
 void InitHook()
 {
-    QWORD* lpVTable = (QWORD*)g_lpVirtualTable;
+    ULONG_PTR* lpVTable = (ULONG_PTR*)g_lpVirtualTable;
+
     MH_Initialize();
 
     // Present
@@ -53,7 +53,7 @@ void ReleaseHook()
     ::free(g_lpVirtualTable);
     g_lpVirtualTable = nullptr;
 
-    SetEvent(g_hEndEvent);
+    ::SetEvent(g_hEndEvent);
 }
 
 LRESULT WINAPI HK_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -226,51 +226,44 @@ DWORD WINAPI Start(LPVOID lpParameter)
         windowClass.hInstance,
         NULL);
 
-    HMODULE hD3D11Module = ::GetModuleHandleA("d3d11.dll");
-    if (hD3D11Module)
+    LPVOID D3D11CreateDeviceAndSwapChain = ::GetProcAddress(::GetModuleHandle("d3d11.dll"), "D3D11CreateDeviceAndSwapChain");
+    D3D_FEATURE_LEVEL featureLevel;
+    D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0 };
+
+    DXGI_SWAP_CHAIN_DESC swapChainDesc{};
+    swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+    swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
+    swapChainDesc.BufferDesc.Width = 100;
+    swapChainDesc.BufferDesc.Height = 100;
+    swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+    swapChainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.SampleDesc.Quality = 0;
+    swapChainDesc.BufferCount = 1;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    swapChainDesc.OutputWindow = hWnd;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapChainDesc.Windowed = 1;
+
+    IDXGISwapChain* pSwapChain;
+    ID3D11Device* pD3D11Device;
+    ID3D11DeviceContext* pD3D11Context;
+    if (!((DWORD(WINAPI*)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, const DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**))
+        (D3D11CreateDeviceAndSwapChain))(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels, 2, D3D11_SDK_VERSION, &swapChainDesc, &pSwapChain, &pD3D11Device, &featureLevel, &pD3D11Context))
     {
-        LPVOID D3D11CreateDeviceAndSwapChain = ::GetProcAddress(hD3D11Module, "D3D11CreateDeviceAndSwapChain");
-        if (D3D11CreateDeviceAndSwapChain)
+        g_lpVirtualTable = ::calloc(205, sizeof(ULONG_PTR));
+        if (g_lpVirtualTable)
         {
-            D3D_FEATURE_LEVEL featureLevel;
-            D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0 };
+            ::memcpy(g_lpVirtualTable, *(ULONG_PTR**)pSwapChain, 18 * sizeof(ULONG_PTR));
+            ::memcpy((ULONG_PTR*)g_lpVirtualTable + 18, *(ULONG_PTR**)pD3D11Device, 43 * sizeof(ULONG_PTR));
+            ::memcpy((ULONG_PTR*)g_lpVirtualTable + 18 + 43, *(ULONG_PTR**)pD3D11Context, 144 * sizeof(ULONG_PTR));
+            pSwapChain->Release();
+            pD3D11Device->Release();
+            pD3D11Context->Release();
 
-            DXGI_SWAP_CHAIN_DESC swapChainDesc{};
-            swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
-            swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
-            swapChainDesc.BufferDesc.Width = 100;
-            swapChainDesc.BufferDesc.Height = 100;
-            swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            swapChainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-            swapChainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-            swapChainDesc.SampleDesc.Count = 1;
-            swapChainDesc.SampleDesc.Quality = 0;
-            swapChainDesc.BufferCount = 1;
-            swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-            swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-            swapChainDesc.OutputWindow = hWnd;
-            swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-            swapChainDesc.Windowed = 1;
-
-            IDXGISwapChain* pSwapChain;
-            ID3D11Device* pD3D11Device;
-            ID3D11DeviceContext* pD3D11Context;
-            if (!((DWORD(WINAPI*)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, const DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**))
-                (D3D11CreateDeviceAndSwapChain))(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels, 2, D3D11_SDK_VERSION, &swapChainDesc, &pSwapChain, &pD3D11Device, &featureLevel, &pD3D11Context))
-            {
-                g_lpVirtualTable = ::calloc(205, sizeof(QWORD));
-                if (g_lpVirtualTable)
-                {
-                    ::memcpy(g_lpVirtualTable, *(QWORD**)pSwapChain, 18 * sizeof(QWORD));
-                    ::memcpy((QWORD*)g_lpVirtualTable + 18, *(QWORD**)pD3D11Device, 43 * sizeof(QWORD));
-                    ::memcpy((QWORD*)g_lpVirtualTable + 18 + 43, *(QWORD**)pD3D11Context, 144 * sizeof(QWORD));
-                    pSwapChain->Release();
-                    pD3D11Device->Release();
-                    pD3D11Context->Release();
-
-                    InitHook();
-                }
-            }
+            InitHook();
         }
     }
     ::DestroyWindow(hWnd);
@@ -278,7 +271,7 @@ DWORD WINAPI Start(LPVOID lpParameter)
 
     if (g_hEndEvent)
         ::WaitForSingleObject(g_hEndEvent, INFINITE);
-    ::FreeLibraryAndExitThread(g_hInstance, 0);
+    ::FreeLibraryAndExitThread(g_hInstance, EXIT_SUCCESS);
 
     return 0;
 }
@@ -296,6 +289,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         break;
 
     case DLL_PROCESS_DETACH:
+        ::Sleep(100);
         MH_Uninitialize();
         break;
     }
