@@ -1,10 +1,12 @@
 # ImGui-DirectX11-Hook
 
 ## Getting Started
-[Dllmain.cpp](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/ImGui-DirectX11-Hook/Dllmain.cpp#L183-L184)
+[Dllmain.cpp](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/ImGui-DirectX11-Hook/Dllmain.cpp#L221-L222)
 ```C++
-ImGui::ShowDemoWindow();
-//g_GuiWindow->Update();
+if (g_GuiWindow->showMenu) {
+    ImGui::ShowDemoWindow();
+    //g_GuiWindow->Update();
+}
 ```
 
 ## Screenshot
