@@ -14,7 +14,7 @@ ResizeBuffers           Original_ResizeBuffers;
 WNDPROC                 Original_WndProc;
 HMODULE                 g_hInstance;
 HANDLE                  g_hEndEvent;
-LPVOID                  g_lpVirtualTable;
+ULONG_PTR*              g_lpVTable;
 GuiWindow*              g_GuiWindow;
 ID3D11Device*           g_pDx11Device;
 ID3D11DeviceContext*    g_pDx11Context;
@@ -22,17 +22,16 @@ ID3D11RenderTargetView* g_pDx11RenderTargetView;
 
 void InitHook()
 {
-    ULONG_PTR* lpVTable = (ULONG_PTR*)g_lpVirtualTable;
     MH_Initialize();
 
     // Present
-    LPVOID lpTarget = (LPVOID)lpVTable[8];
-    MH_CreateHook(lpTarget, HK_Present, (void**)&Original_Present);
+    LPVOID lpTarget = (LPVOID)g_lpVTable[8];
+    MH_CreateHook(lpTarget, HK_Present, (LPVOID*)&Original_Present);
     MH_EnableHook(lpTarget);
 
     // ResizeBuffers
-    lpTarget = (LPVOID)lpVTable[13];
-    MH_CreateHook(lpTarget, HK_ResizeBuffers, (void**)&Original_ResizeBuffers);
+    lpTarget = (LPVOID)g_lpVTable[13];
+    MH_CreateHook(lpTarget, HK_ResizeBuffers, (LPVOID*)&Original_ResizeBuffers);
     MH_EnableHook(lpTarget);
 }
 
@@ -49,8 +48,8 @@ void ReleaseHook()
     g_pDx11Context->Release();
     g_pDx11RenderTargetView->Release();
 
-    ::free(g_lpVirtualTable);
-    g_lpVirtualTable = nullptr;
+    ::free(g_lpVTable);
+    g_lpVTable = nullptr;
 
     ::SetEvent(g_hEndEvent);
 }
@@ -60,7 +59,7 @@ inline void InitImGui()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags = ImGuiConfigFlags_NoMouseCursorChange;
-    io.Fonts->AddFontFromFileTTF(g_GuiWindow->fontPath, FONTSIZE);
+    io.Fonts->AddFontFromFileTTF(g_GuiWindow->fontPath.c_str(), FONT_SIZE);
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
 
@@ -188,9 +187,9 @@ HRESULT WINAPI HK_ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UI
 
 HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
-    static bool bImGuiInit = false;
+    static bool imGuiInitialized = false;
 
-    if (!bImGuiInit)
+    if (!imGuiInitialized)
     {
         if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_pDx11Device)))
         {
@@ -202,13 +201,13 @@ HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Fl
                 pBackBuffer->Release();
 
                 InitImGui();
-                bImGuiInit = true;
+                imGuiInitialized = true;
             }
         }
         else
             return Original_Present(pSwapChain, SyncInterval, Flags);
     }
-    else if (g_GuiWindow->uiStatus & GuiWindow::Detach)
+    else if (g_GuiWindow->uiStatus & static_cast<DWORD>(GuiWindow::GuiState::GuiState_Detach))
     {
         ReleaseHook();
         return Original_Present(pSwapChain, SyncInterval, Flags);
@@ -230,12 +229,12 @@ HRESULT WINAPI HK_Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Fl
     return Original_Present(pSwapChain, SyncInterval, Flags);
 }
 
-DWORD WINAPI Start(LPVOID lpParameter)
+DWORD WINAPI ThreadEntry(LPVOID lpParameter)
 {
     g_hInstance = (HMODULE)lpParameter;
     g_hEndEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
     g_GuiWindow = new GuiWindow();
-    g_GuiWindow->Init();
+    g_GuiWindow->Initialize();
 
     WNDCLASSEX windowClass{};
     windowClass.cbSize = sizeof(WNDCLASSEX);
@@ -292,12 +291,12 @@ DWORD WINAPI Start(LPVOID lpParameter)
     if (!((DWORD(WINAPI*)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT, const DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**))
         (D3D11CreateDeviceAndSwapChain))(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels, 2, D3D11_SDK_VERSION, &swapChainDesc, &pSwapChain, &pD3D11Device, &featureLevel, &pD3D11Context))
     {
-        g_lpVirtualTable = ::calloc(205, sizeof(ULONG_PTR));
-        if (g_lpVirtualTable)
+        g_lpVTable = (ULONG_PTR*)::calloc(205, sizeof(ULONG_PTR));
+        if (g_lpVTable)
         {
-            ::memcpy(g_lpVirtualTable, *(ULONG_PTR**)pSwapChain, 18 * sizeof(ULONG_PTR));
-            ::memcpy((ULONG_PTR*)g_lpVirtualTable + 18, *(ULONG_PTR**)pD3D11Device, 43 * sizeof(ULONG_PTR));
-            ::memcpy((ULONG_PTR*)g_lpVirtualTable + 18 + 43, *(ULONG_PTR**)pD3D11Context, 144 * sizeof(ULONG_PTR));
+            ::memcpy(g_lpVTable, *(ULONG_PTR**)pSwapChain, 18 * sizeof(ULONG_PTR));
+            ::memcpy((ULONG_PTR*)g_lpVTable + 18, *(ULONG_PTR**)pD3D11Device, 43 * sizeof(ULONG_PTR));
+            ::memcpy((ULONG_PTR*)g_lpVTable + 18 + 43, *(ULONG_PTR**)pD3D11Context, 144 * sizeof(ULONG_PTR));
             pSwapChain->Release();
             pD3D11Device->Release();
             pD3D11Context->Release();
@@ -324,7 +323,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
             return false;
 
         ::DisableThreadLibraryCalls(hModule);
-        ::CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Start, hModule, 0, NULL);
+        ::CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ThreadEntry, hModule, 0, NULL);
         break;
 
     case DLL_PROCESS_DETACH:
