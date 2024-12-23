@@ -1,12 +1,17 @@
 # ImGui-DirectX11-Hook
 
 ## Getting Started
-[Dllmain.cpp](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/ImGui-DirectX11-Hook/Dllmain.cpp#L220-L221)
+[Dllmain.cpp](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/ImGui-DirectX11-Hook/Dllmain.cpp#L223-L224)
 ```C++
-if (g_GuiWindow->showMenu) {
-    ImGui::ShowDemoWindow();
-    //g_GuiWindow->Update();
-}
+ImGui::ShowDemoWindow();
+//g_GuiWindow->Update();
+```
+[GuiWindow.cpp](https://github.com/WangPeng95997/ImGui-DirectX11-Hook/blob/master/ImGui-DirectX11-Hook/GuiWindow.cpp#L116-L119)
+```C++
+// Insert your custom ImGui code here
+ImGui::Text("Hello World");
+ImGui::Checkbox("Hello World##0", (bool*)this->lpBuffer);
+ImGui::Button("Hello World##1", ImVec2(100.0f, 20.0f));
 ```
 
 ## Screenshot

@@ -57,9 +57,12 @@ void ReleaseHook()
 inline void InitImGui()
 {
     ImGui::CreateContext();
+
+    ImFontConfig fontConfig{};
+    fontConfig.GlyphOffset.y = -1.75f;
+
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags = ImGuiConfigFlags_NoMouseCursorChange;
-    io.Fonts->AddFontFromFileTTF(g_GuiWindow->fontPath.c_str(), FONT_SIZE);
+    io.Fonts->AddFontFromFileTTF(g_GuiWindow->fontPath.c_str(), FONT_SIZE, &fontConfig);
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
 
@@ -79,7 +82,7 @@ inline void InitImGui()
     style.IndentSpacing = 25.0f;
     style.ScrollbarSize = 0.0f;
     style.GrabMinSize = 10.0f;
-    style.ButtonTextAlign = ImVec2(0.5f, 0.46f);
+    style.ButtonTextAlign = ImVec2(0.5f, 0.50f);
 
     ImVec4* colors = style.Colors;
     colors[ImGuiCol_Text] = ImVec4(0.95f, 0.96f, 0.98f, 1.00f);
@@ -247,18 +250,18 @@ DWORD WINAPI ThreadEntry(LPVOID lpParameter)
     windowClass.hCursor = NULL;
     windowClass.hbrBackground = NULL;
     windowClass.lpszMenuName = NULL;
-    windowClass.lpszClassName = "DirectX11";
+    windowClass.lpszClassName = "Dear ImGui DirectX11";
     windowClass.hIconSm = NULL;
 
     ::RegisterClassEx(&windowClass);
     HWND hWnd = ::CreateWindow(
         windowClass.lpszClassName,
-        "DirectX11Window",
+        windowClass.lpszClassName,
         WS_OVERLAPPEDWINDOW,
-        0,
-        0,
-        100,
-        100,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
         NULL,
         NULL,
         windowClass.hInstance,
@@ -309,6 +312,7 @@ DWORD WINAPI ThreadEntry(LPVOID lpParameter)
 
     if (g_hEndEvent)
         ::WaitForSingleObject(g_hEndEvent, INFINITE);
+    delete g_GuiWindow;
     ::FreeLibraryAndExitThread(g_hInstance, EXIT_SUCCESS);
 
     return 0;
