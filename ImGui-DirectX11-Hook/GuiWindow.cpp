@@ -123,8 +123,6 @@ void GuiWindow::Update()
 
 void GuiWindow::ExitButton()
 {
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
     ImGui::SetCursorPos(ImVec2(0, 0));
     ImGui::BeginChildFrame(CHILD_FRAME_ID, ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
     ImGui::SetCursorPos(ImVec2(0, 0));
@@ -145,5 +143,4 @@ void GuiWindow::ExitButton()
 
     ImGui::EndChild();
     ImGui::EndChildFrame();
-    ImGui::PopStyleColor(2);
 }

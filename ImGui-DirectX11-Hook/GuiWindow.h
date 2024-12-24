@@ -4,7 +4,6 @@
 #include "Imgui/imgui_impl_win32.h"
 #include "ImGui/imgui_internal.h"
 #include <Windows.h>
-#include <sstream>
 #include <string>
 
 constexpr const char* AUTHOR_INFO = "Created by l4kkS41 On ";
